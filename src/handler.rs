@@ -120,15 +120,15 @@ impl<'a> SpotifyHandler<'a> {
 
         if total == total_cached {
             if latest_addition == latest_addition_cached {
-                println!("No new songs saved");
+                // println!("No new songs saved");
                 cached_saved_songs
             } else {
-                println!("We have the right amount of songs, but the latest addition is different. Refetch just to be sure");
+                // println!("We have the right amount of songs, but the latest addition is different. Refetch just to be sure");
                 self.saved_songs_download()
             }
         } else if latest_addition > latest_addition_cached {
             // There are new songs that we have not cached yet, probably.
-            println!("We have more songs than we have cached. Refetch just to be sure");
+            // println!("We have more songs than we have cached. Refetch just to be sure");
 
             // Check if the downloaded songs are already enough
             let new_songs: Vec<SavedTrack> = saved_songs
@@ -140,10 +140,10 @@ impl<'a> SpotifyHandler<'a> {
                 return self.saved_songs_download();
             }
 
-            println!(
-                "There were {} new songs added that we have fetched.",
-                new_songs.len()
-            );
+            // println!(
+            // "There were {} new songs added that we have fetched.",
+            // new_songs.len()
+            // );
 
             let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
             all_saved_songs.extend(new_songs);
@@ -158,13 +158,10 @@ impl<'a> SpotifyHandler<'a> {
     }
 
     fn saved_songs_download(&self) -> Vec<SavedTrack> {
-        let result: Vec<SavedTrack> = self
-            .client
+        self.client
             .current_user_saved_tracks(None)
             .filter_map(|t| t.ok())
-            .collect();
-
-        result
+            .collect()
     }
 
     pub fn get_track_ids_in_playlists(
@@ -173,7 +170,6 @@ impl<'a> SpotifyHandler<'a> {
     ) -> HashSet<String> {
         let mut songs_in_playlists: HashSet<String> = HashSet::new();
 
-        println!("Fetching your playlists");
         let pb = ProgressBar::new(playlists.len() as u64);
 
         for playlist in playlists {
