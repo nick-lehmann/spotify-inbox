@@ -28,15 +28,13 @@ impl<'a> SpotifyHandler<'a> {
     pub fn playlist_find_inbox(&self) -> SimplifiedPlaylist {
         let mut user_playlists = self.client.current_user_playlists();
 
-        let inbox_playlist = user_playlists
+        user_playlists
             .find(|playlist| match playlist {
                 Ok(playlist) => playlist.name.contains("Inbox"),
                 _ => false,
             })
             .expect("No inbox playlist found")
-            .unwrap();
-
-        return inbox_playlist;
+            .unwrap()
     }
 
     pub fn playlist_get(&self, playlist: &SimplifiedPlaylist) -> storage::CompletePlaylist {
@@ -77,7 +75,7 @@ impl<'a> SpotifyHandler<'a> {
 
         self.storage.write_playlist(&full_playlist);
 
-        return full_playlist;
+        full_playlist
     }
 
     /// Returns all playlists that are owned by the current user.
@@ -123,41 +121,39 @@ impl<'a> SpotifyHandler<'a> {
         if total == total_cached {
             if latest_addition == latest_addition_cached {
                 println!("No new songs saved");
-                return cached_saved_songs;
+                cached_saved_songs
             } else {
                 println!("We have the right amount of songs, but the latest addition is different. Refetch just to be sure");
+                self.saved_songs_download()
+            }
+        } else if latest_addition > latest_addition_cached {
+            // There are new songs that we have not cached yet, probably.
+            println!("We have more songs than we have cached. Refetch just to be sure");
+
+            // Check if the downloaded songs are already enough
+            let new_songs: Vec<SavedTrack> = saved_songs
+                .into_iter()
+                .filter(|song| song.added_at > latest_addition_cached)
+                .collect();
+            if new_songs.len() == page_size as usize {
+                // Just download everything
                 return self.saved_songs_download();
             }
+
+            println!(
+                "There were {} new songs added that we have fetched.",
+                new_songs.len()
+            );
+
+            let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
+            all_saved_songs.extend(new_songs);
+            all_saved_songs.extend(cached_saved_songs);
+
+            all_saved_songs
         } else {
-            if latest_addition > latest_addition_cached {
-                // There are new songs that we have not cached yet, probably.
-                println!("We have more songs than we have cached. Refetch just to be sure");
-
-                // Check if the downloaded songs are already enough
-                let new_songs: Vec<SavedTrack> = saved_songs
-                    .into_iter()
-                    .filter(|song| song.added_at > latest_addition_cached)
-                    .collect();
-                if new_songs.len() == page_size as usize {
-                    // Just download everything
-                    return self.saved_songs_download();
-                }
-
-                println!(
-                    "There were {} new songs added that we have fetched.",
-                    new_songs.len()
-                );
-
-                let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
-                all_saved_songs.extend(new_songs);
-                all_saved_songs.extend(cached_saved_songs);
-
-                return all_saved_songs;
-            } else {
-                // There were songs removed from the front that are still cached, probably.
-                println!("We have less songs than we have cached. Refetch just to be sure");
-                return self.saved_songs_download();
-            }
+            // There were songs removed from the front that are still cached, probably.
+            println!("We have less songs than we have cached. Refetch just to be sure");
+            self.saved_songs_download()
         }
     }
 
@@ -168,7 +164,7 @@ impl<'a> SpotifyHandler<'a> {
             .filter_map(|t| t.ok())
             .collect();
 
-        return result;
+        result
     }
 
     pub fn get_track_ids_in_playlists(
@@ -200,6 +196,6 @@ impl<'a> SpotifyHandler<'a> {
 
         pb.finish_with_message("done 👍🏻");
 
-        return songs_in_playlists;
+        songs_in_playlists
     }
 }

@@ -100,10 +100,9 @@ impl<'a> SpotifyStoragePathHelper<'a> {
     #[allow(dead_code)]
     pub fn get_cache_path(&self) -> PathBuf {
         let config_name = format!("{}.json", APP_NAME);
-        let config_path = self
-            .xdg_dirs
+
+        self.xdg_dirs
             .find_cache_file(config_name)
-            .expect("Unable to find cache file");
-        config_path
+            .expect("Unable to find cache file")
     }
 }

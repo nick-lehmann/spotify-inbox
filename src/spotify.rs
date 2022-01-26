@@ -1,9 +1,9 @@
-use std::{collections::HashSet, path::PathBuf};
+use std::{collections::HashSet, path::Path};
 
 use rspotify::{prelude::*, scopes, AuthCodePkceSpotify, Config, Credentials, OAuth};
 use rspotify_model::{PlaylistId, TrackId};
 
-pub fn get_client(cache_path: &PathBuf) -> AuthCodePkceSpotify {
+pub fn get_client(cache_path: &Path) -> AuthCodePkceSpotify {
     let credentials = Credentials {
         id: "be2a290c5f2c4208af53c58952fc7af5".to_string(),
         secret: Some("".to_string()),
@@ -46,7 +46,7 @@ pub fn get_client(cache_path: &PathBuf) -> AuthCodePkceSpotify {
     let url = spotify.get_authorize_url(None).unwrap();
     spotify.prompt_for_token(&url).unwrap();
 
-    return spotify;
+    spotify
 }
 
 pub trait SpotifyHelper {
