@@ -11,22 +11,9 @@ const APP_NAME: &str = "spotify-inbox";
 
 fn main() {
     let xdg_dirs = xdg::BaseDirectories::with_prefix(APP_NAME).unwrap();
-    let config_name = format!("{}.json", APP_NAME);
+    let storage = storage::SpotifyStorage::new(&xdg_dirs);
 
-    let cache_dir = xdg_dirs
-        .create_cache_directory(APP_NAME)
-        .expect("Unable to create cache directory");
-    println!("Cache dir: {:?}", cache_dir);
-
-    let storage = storage::SpotifyStorage {
-        xdg_dirs: &xdg_dirs,
-    };
-
-    // let token = spotify.token.as_ref().lock().unwrap();
-    // println!("Access token: {}", token.as_ref().unwrap().access_token);
-    // println!("Refresh token: {:?}", token.as_ref().unwrap().refresh_token);
-
-    let client = get_client(&cache_dir.join(config_name));
+    let client = get_client(&storage.path_helper.get_cache_path());
 
     let handler = SpotifyHandler {
         client: &client,

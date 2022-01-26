@@ -1,6 +1,7 @@
-use std::path::PathBuf;
+use std::{collections::HashSet, path::PathBuf};
 
 use rspotify::{prelude::*, scopes, AuthCodePkceSpotify, Config, Credentials, OAuth};
+use rspotify_model::{PlaylistId, TrackId};
 
 pub fn get_client(cache_path: &PathBuf) -> AuthCodePkceSpotify {
     let credentials = Credentials {
@@ -46,4 +47,73 @@ pub fn get_client(cache_path: &PathBuf) -> AuthCodePkceSpotify {
     spotify.prompt_for_token(&url).unwrap();
 
     return spotify;
+}
+
+pub trait SpotifyHelper {
+    fn playlist_add_all_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>);
+    fn playlist_remove_all_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>);
+}
+
+impl SpotifyHelper for AuthCodePkceSpotify {
+    /// Add all given tracks to a playlist.
+    ///
+    /// Spotify imposes a limit of 100 tracks maximum per request. If the given number of tracks is
+    /// bigger, another request will be sent.
+    // TODO: Create PR to rspotify.
+    fn playlist_add_all_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>) {
+        let track_ids = tracks
+            .iter()
+            .map(|id| TrackId::from_id(id).unwrap())
+            .collect::<Vec<TrackId>>();
+
+        track_ids.chunks(100).for_each(|chunk| {
+            // TODO: Uff... find a more elegant solution for the ID conversion
+            let playable = chunk
+                .iter()
+                .map(|id| id as &dyn PlayableId)
+                .collect::<Vec<&dyn PlayableId>>();
+
+            let result = self.playlist_add_items(playlist_id, playable, None);
+
+            match result {
+                Ok(_) => {
+                    println!("Added {} songs to your inbox", chunk.len());
+                }
+                Err(e) => {
+                    println!("Failed to add songs to your inbox: {}", e);
+                }
+            }
+        });
+    }
+
+    /// Add all given tracks to a playlist.
+    ///
+    /// Spotify imposes a limit of 100 tracks maximum per request. If the given number of tracks is
+    /// bigger, another request will be sent.
+    // TODO: Create PR to rspotify.
+    fn playlist_remove_all_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>) {
+        let track_ids = tracks
+            .iter()
+            .map(|id| TrackId::from_id(id).unwrap())
+            .collect::<Vec<TrackId>>();
+
+        track_ids.chunks(100).for_each(|chunk| {
+            // TODO: Same as above
+            let playable = chunk
+                .iter()
+                .map(|id| id as &dyn PlayableId)
+                .collect::<Vec<&dyn PlayableId>>();
+
+            let result = self.playlist_remove_all_occurrences_of_items(playlist_id, playable, None);
+
+            match result {
+                Ok(_) => {
+                    println!("Removed {} songs from your inbox", chunk.len());
+                }
+                Err(e) => {
+                    println!("Failed to remove songs to your inbox: {}", e);
+                }
+            }
+        });
+    }
 }

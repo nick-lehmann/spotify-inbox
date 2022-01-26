@@ -1,13 +1,12 @@
-use std::{collections::HashSet, fs};
-
+use indicatif::ProgressBar;
 use rspotify::{
     clients::{BaseClient, OAuthClient},
     AuthCodePkceSpotify,
 };
 use rspotify_model::{
-    Id, PlayableId, PlayableItem, PlaylistId, PlaylistItem, PrivateUser, SavedTrack,
-    SimplifiedPlaylist, TrackId,
+    Id, Page, PlayableItem, PlaylistItem, PrivateUser, SavedTrack, SimplifiedPlaylist,
 };
+use std::collections::HashSet;
 
 use crate::storage;
 
@@ -26,7 +25,7 @@ impl<'a> SpotifyHandler<'a> {
         println!("{:?}", current_user);
     }
 
-    fn inbox_playlist(&self) -> SimplifiedPlaylist {
+    pub fn playlist_find_inbox(&self) -> SimplifiedPlaylist {
         let mut user_playlists = self.client.current_user_playlists();
 
         let inbox_playlist = user_playlists
@@ -40,40 +39,49 @@ impl<'a> SpotifyHandler<'a> {
         return inbox_playlist;
     }
 
-    pub fn print_inbox(&self) {
-        let inbox = self.inbox_playlist();
-        println!(
-            "Your inbox playlist is called {} and has {} tracks",
-            inbox.name, inbox.tracks.total
-        );
-    }
+    pub fn playlist_get(&self, playlist: &SimplifiedPlaylist) -> storage::CompletePlaylist {
+        let cached_playlist = self.storage.get_playlist(&playlist.id);
 
-    // TODO: Adjust storage path
-    /// Downloads the current items in a playlist and stores them in a cache file
-    pub fn cache_playlist(&self, playlist: &SimplifiedPlaylist) {
-        println!(
-            "Downloading playlist {} ({})",
-            playlist.name,
-            playlist.id.id()
-        );
+        match cached_playlist {
+            Some(cached_playlist) => {
+                if cached_playlist.snapshot_id == playlist.snapshot_id {
+                    // println!("Using cached playlist");
+                    return cached_playlist;
+                } else {
+                    // println!("Cached playlist is out of date");
+                }
+            }
+            None => {
+                // println!("No cached playlist found");
+            }
+        }
 
-        let playlist_items: Vec<PlaylistItem> = self
+        let playlist_tracks: Vec<PlaylistItem> = self
             .client
             .playlist_items(&playlist.id, None, None)
             .filter_map(|p| p.ok())
             .collect();
 
-        let json =
-            serde_json::to_string(&playlist_items).expect("Failed to serialize playlist items");
+        let full_playlist = storage::CompletePlaylist {
+            tracks: playlist_tracks,
+            collaborative: playlist.collaborative,
+            external_urls: playlist.external_urls.to_owned(),
+            href: playlist.href.to_owned(),
+            id: playlist.id.to_owned(),
+            images: playlist.images.to_owned(),
+            name: playlist.name.to_owned(),
+            owner: playlist.owner.to_owned(),
+            public: playlist.public.to_owned(),
+            snapshot_id: playlist.snapshot_id.to_owned(),
+        };
 
-        let playlist_filename = format!("{}.json", playlist.id.id());
-        let playlist_path = self.xdg_dirs.get_cache_file(playlist_filename);
+        self.storage.write_playlist(&full_playlist);
 
-        fs::write(playlist_path, json).expect("Failed to write playlist to file");
+        return full_playlist;
     }
 
     /// Returns all playlists that are owned by the current user.
-    pub fn get_user_playlists(&self) -> Vec<SimplifiedPlaylist> {
+    pub fn playlist_get_owned_by_user(&self) -> Vec<SimplifiedPlaylist> {
         let current_user: PrivateUser = self.client.me().unwrap();
 
         return self
@@ -84,27 +92,83 @@ impl<'a> SpotifyHandler<'a> {
             .collect();
     }
 
-    /// Download all playlists to cache
-    pub fn playlists(&self) {
-        let user_playlists = self.get_user_playlists();
+    /// Return the ids of all saved songs.
+    // pub fn get_saved_songs(&self) -> Vec<String> {
+    pub fn saved_songs(&self) -> Vec<SavedTrack> {
+        // TODO: Skip if None received
+        let mut cached_saved_songs = match self.storage.get_saved_songs() {
+            Some(saved_songs) => saved_songs,
+            None => return self.saved_songs_download(),
+        };
 
-        self.cache_playlist(&user_playlists[0])
+        let total_cached = cached_saved_songs.len() as u32;
+
+        cached_saved_songs.sort_unstable_by_key(|s| s.added_at);
+        cached_saved_songs.reverse();
+
+        let page_size = 50;
+        let saved_songs_page: Page<SavedTrack> = self
+            .client
+            .current_user_saved_tracks_manual(None, Some(page_size), Some(0))
+            .unwrap();
+        let total = saved_songs_page.total;
+        let mut saved_songs = saved_songs_page.items;
+
+        saved_songs.sort_unstable_by_key(|s| s.added_at);
+        saved_songs.reverse();
+
+        let latest_addition = saved_songs[0].added_at;
+        let latest_addition_cached = cached_saved_songs[0].added_at;
+
+        if total == total_cached {
+            if latest_addition == latest_addition_cached {
+                println!("No new songs saved");
+                return cached_saved_songs;
+            } else {
+                println!("We have the right amount of songs, but the latest addition is different. Refetch just to be sure");
+                return self.saved_songs_download();
+            }
+        } else {
+            if latest_addition > latest_addition_cached {
+                // There are new songs that we have not cached yet, probably.
+                println!("We have more songs than we have cached. Refetch just to be sure");
+
+                // Check if the downloaded songs are already enough
+                let new_songs: Vec<SavedTrack> = saved_songs
+                    .into_iter()
+                    .filter(|song| song.added_at > latest_addition_cached)
+                    .collect();
+                if new_songs.len() == page_size as usize {
+                    // Just download everything
+                    return self.saved_songs_download();
+                }
+
+                println!(
+                    "There were {} new songs added that we have fetched.",
+                    new_songs.len()
+                );
+
+                let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
+                all_saved_songs.extend(new_songs);
+                all_saved_songs.extend(cached_saved_songs);
+
+                return all_saved_songs;
+            } else {
+                // There were songs removed from the front that are still cached, probably.
+                println!("We have less songs than we have cached. Refetch just to be sure");
+                return self.saved_songs_download();
+            }
+        }
     }
 
-    // TODO: Return better data type
-    /// Return the ids of all saved songs.
-    pub fn get_saved_songs(&self) -> Vec<String> {
+    fn saved_songs_download(&self) -> Vec<SavedTrack> {
         let result: Vec<SavedTrack> = self
             .client
             .current_user_saved_tracks(None)
             .filter_map(|t| t.ok())
             .collect();
 
-        let mut ids: Vec<String> = Vec::new();
-        for track in &result {
-            ids.push(track.track.id.as_ref().unwrap().id().to_string());
-        }
-        return ids;
+        return result;
     }
 
     pub fn get_track_ids_in_playlists(
@@ -113,16 +177,16 @@ impl<'a> SpotifyHandler<'a> {
     ) -> HashSet<String> {
         let mut songs_in_playlists: HashSet<String> = HashSet::new();
 
-        for playlist in playlists {
-            println!("Fetching playlist {}", playlist.name);
-            let playlist_items: Vec<PlaylistItem> = self
-                .client
-                .playlist_items(&playlist.id, None, None)
-                .filter_map(|p| p.ok())
-                .collect();
+        println!("Fetching your playlists");
+        let pb = ProgressBar::new(playlists.len() as u64);
 
-            for item in &playlist_items {
-                let track = &item.track.as_ref().unwrap();
+        for playlist in playlists {
+            let playlist = self.playlist_get(playlist);
+
+            pb.inc(1);
+
+            for item in &playlist.tracks {
+                let track = item.track.as_ref().unwrap();
                 match track {
                     PlayableItem::Track(track) => {
                         if let Some(id) = track.id.as_ref() {
@@ -134,114 +198,8 @@ impl<'a> SpotifyHandler<'a> {
             }
         }
 
+        pb.finish_with_message("done 👍🏻");
+
         return songs_in_playlists;
-    }
-
-    /// Add all given tracks to a playlist.
-    ///
-    /// Spotify imposes a limit of 100 tracks maximum per request. If the given number of tracks is
-    /// bigger, another request will be sent.
-    fn playlist_add_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>) {
-        let track_ids = tracks
-            .iter()
-            .map(|id| TrackId::from_id(id).unwrap())
-            .collect::<Vec<TrackId>>();
-
-        track_ids.chunks(100).for_each(|chunk| {
-            // TODO: Uff... find a more elegant solution for the ID conversion
-            let playable = chunk
-                .iter()
-                .map(|id| id as &dyn PlayableId)
-                .collect::<Vec<&dyn PlayableId>>();
-
-            let result = self.client.playlist_add_items(playlist_id, playable, None);
-
-            match result {
-                Ok(_) => {
-                    println!("Added {} songs to your inbox", chunk.len());
-                }
-                Err(e) => {
-                    println!("Failed to add songs to your inbox: {}", e);
-                }
-            }
-        });
-    }
-
-    /// Add all given tracks to a playlist.
-    ///
-    /// Spotify imposes a limit of 100 tracks maximum per request. If the given number of tracks is
-    /// bigger, another request will be sent.
-    fn playlist_remove_items(&self, playlist_id: &PlaylistId, tracks: &HashSet<String>) {
-        let track_ids = tracks
-            .iter()
-            .map(|id| TrackId::from_id(id).unwrap())
-            .collect::<Vec<TrackId>>();
-
-        track_ids.chunks(100).for_each(|chunk| {
-            // TODO: Same as above
-            let playable = chunk
-                .iter()
-                .map(|id| id as &dyn PlayableId)
-                .collect::<Vec<&dyn PlayableId>>();
-
-            let result =
-                self.client
-                    .playlist_remove_all_occurrences_of_items(playlist_id, playable, None);
-
-            match result {
-                Ok(_) => {
-                    println!("Removed {} songs from your inbox", chunk.len());
-                }
-                Err(e) => {
-                    println!("Failed to remove songs to your inbox: {}", e);
-                }
-            }
-        });
-    }
-
-    /// Flow:
-    /// - Get saved songs
-    /// - Get all playlists, only keep playlists created by the current user
-    /// - Get all songs in user playlists
-    /// - Compare songs
-    /// - Get songs in inbox
-    /// - Diff; add & remove songs
-    pub fn sync(&self) {
-        let saved_songs_vec = self.get_saved_songs();
-        let saved_songs: HashSet<String> = HashSet::from_iter(saved_songs_vec.iter().cloned());
-
-        let user_playlists = self.get_user_playlists();
-        let tracks_in_playlists = self.get_track_ids_in_playlists(&user_playlists);
-
-        let unsorted_tracks: HashSet<String> = saved_songs
-            .difference(&tracks_in_playlists)
-            .cloned()
-            .collect();
-
-        println!("You have {} saved songs", saved_songs.len());
-        println!("You have {} unsorted songs", unsorted_tracks.len());
-
-        let inbox_playlist = self.inbox_playlist();
-        let tracks_in_inbox =
-            self.get_track_ids_in_playlists(vec![inbox_playlist.clone()].as_ref());
-
-        let to_be_added: HashSet<String> = unsorted_tracks
-            .difference(&tracks_in_inbox)
-            .cloned()
-            .collect();
-
-        let to_be_removed: HashSet<String> = tracks_in_inbox
-            .intersection(&tracks_in_playlists)
-            .cloned()
-            .collect();
-
-        println!("{} songs will be added to your inbox", to_be_added.len());
-        println!(
-            "{} songs will be removed from your inbox",
-            to_be_removed.len()
-        );
-
-        self.playlist_add_items(&inbox_playlist.id, &to_be_added);
-        self.playlist_remove_items(&inbox_playlist.id, &to_be_removed)
     }
 }
