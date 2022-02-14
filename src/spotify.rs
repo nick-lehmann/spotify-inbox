@@ -1,35 +1,22 @@
 use std::{collections::HashSet, path::Path};
 
-use rspotify::{prelude::*, scopes, AuthCodePkceSpotify, Config, Credentials, OAuth};
-use rspotify_model::{PlaylistId, TrackId};
+use rspotify::{prelude::*, scopes, AuthCodePkceSpotify, ClientResult, Config, Credentials, OAuth};
+use rspotify_model::{PlaylistId, PlaylistResult, TrackId};
 
 pub fn get_client(cache_path: &Path) -> AuthCodePkceSpotify {
     let credentials = Credentials {
         id: "be2a290c5f2c4208af53c58952fc7af5".to_string(),
-        secret: Some("".to_string()),
+        secret: None,
     };
 
     let oauth = OAuth {
         scopes: scopes![
-            "ugc-image-upload",
-            "user-read-playback-state",
-            "user-modify-playback-state",
-            "user-read-currently-playing",
-            "streaming",
-            "app-remote-control",
-            "user-read-email",
-            "user-read-private",
             "playlist-read-collaborative",
             "playlist-modify-public",
             "playlist-read-private",
             "playlist-modify-private",
             "user-library-modify",
-            "user-library-read",
-            "user-top-read",
-            "user-read-playback-position",
-            "user-read-recently-played",
-            "user-follow-read",
-            "user-follow-modify"
+            "user-library-read"
         ],
         redirect_uri: "http://localhost:8888/callback".to_string(),
         ..Default::default()

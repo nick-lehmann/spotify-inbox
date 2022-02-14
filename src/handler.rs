@@ -13,16 +13,13 @@ use crate::storage;
 pub struct SpotifyHandler<'a> {
     pub client: &'a AuthCodePkceSpotify,
     pub storage: &'a storage::SpotifyStorage<'a>,
-    pub xdg_dirs: &'a xdg::BaseDirectories,
 }
 
 impl<'a> SpotifyHandler<'a> {
-    pub fn me(&self) {
-        let current_user: PrivateUser = self
-            .client
+    pub fn me(&self) -> PrivateUser {
+        self.client
             .me()
-            .expect("Unable to fetch you account information");
-        println!("{:?}", current_user);
+            .expect("Unable to fetch you account information")
     }
 
     pub fn playlist_find_inbox(&self) -> SimplifiedPlaylist {
@@ -92,7 +89,10 @@ impl<'a> SpotifyHandler<'a> {
 
     /// Return the ids of all saved songs.
     // pub fn get_saved_songs(&self) -> Vec<String> {
+    #[allow(unreachable_code)]
     pub fn saved_songs(&self) -> Vec<SavedTrack> {
+        return self.saved_songs_download();
+
         // TODO: Skip if None received
         let mut cached_saved_songs = match self.storage.get_saved_songs() {
             Some(saved_songs) => saved_songs,
@@ -139,11 +139,6 @@ impl<'a> SpotifyHandler<'a> {
                 // Just download everything
                 return self.saved_songs_download();
             }
-
-            // println!(
-            // "There were {} new songs added that we have fetched.",
-            // new_songs.len()
-            // );
 
             let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
             all_saved_songs.extend(new_songs);

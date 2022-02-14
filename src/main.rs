@@ -1,7 +1,10 @@
 use clap::{Parser, Subcommand};
+use commands::inbox::choose_inbox;
+use config::SpotifyInboxConfig;
 extern crate xdg;
 
 mod commands;
+mod config;
 mod handler;
 mod spotify;
 mod storage;
@@ -34,15 +37,15 @@ pub enum Commands {
 }
 
 pub fn main() {
-    let xdg_dirs = xdg::BaseDirectories::with_prefix(APP_NAME).unwrap();
-    let storage = storage::SpotifyStorage::new(&xdg_dirs);
+    let config = SpotifyInboxConfig::new(xdg::BaseDirectories::with_prefix(APP_NAME).unwrap());
 
-    let client = spotify::get_client(&storage.path_helper.get_cache_path());
+    let storage = storage::SpotifyStorage::new(&config);
+
+    let client = spotify::get_client(&storage.config.get_cache_path());
 
     let handler = SpotifyHandler {
         client: &client,
         storage: &storage,
-        xdg_dirs: &xdg_dirs,
     };
 
     let args = Cli::parse();
@@ -52,11 +55,7 @@ pub fn main() {
             handler.me();
         }
         Commands::Inbox {} => {
-            let inbox = handler.playlist_find_inbox();
-            println!(
-                "Your inbox playlist is called {} and has {} tracks",
-                inbox.name, inbox.tracks.total
-            );
+            choose_inbox(&handler, &config);
         }
         Commands::Sync {} => sync::sync(&handler),
         Commands::Config {} => {

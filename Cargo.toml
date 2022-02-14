@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 clap = { version = "3.0.5", features = ["derive"] }
 console = "0.15.0"
+dialoguer = "0.9.0"
 indicatif = "0.16.2"
 rand = "0.8.4"
 rspotify = { version = "0.11.3", features = ["client-ureq", "ureq-rustls-tls", "cli", "env-file"], default-features = false }
