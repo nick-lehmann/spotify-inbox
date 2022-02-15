@@ -23,17 +23,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Me
-    Me {},
-
-    /// Show current inbox playlist
+    /// Set your inbox playlist
     Inbox {},
 
-    /// Sync
+    /// Synchronise your inbox
     Sync {},
-
-    /// Manage cache
-    Config {},
 }
 
 pub fn main() {
@@ -53,18 +47,9 @@ pub fn main() {
     let args = Cli::parse();
 
     match &args.command {
-        Commands::Me {} => {
-            handler.me();
-        }
         Commands::Inbox {} => {
             choose_inbox(&handler, &config);
         }
         Commands::Sync {} => sync::sync(&handler),
-        Commands::Config {} => {
-            // println!("Show config");
-
-            // let config_file = xdg_dirs.find_config_file(config_name).unwrap();
-            // println!("Config file can be found at: {:?}", config_file);
-        }
     }
 }
