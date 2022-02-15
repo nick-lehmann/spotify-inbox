@@ -9,8 +9,8 @@ mod handler;
 mod spotify;
 mod storage;
 
-use crate::commands::sync;
-use crate::handler::SpotifyHandler;
+use commands::sync;
+use handler::SpotifyHandler;
 
 const APP_NAME: &str = "spotify-inbox";
 
@@ -41,7 +41,9 @@ pub fn main() {
 
     let storage = storage::SpotifyStorage::new(&config);
 
-    let client = spotify::get_client(&storage.config.get_cache_path());
+    let cache_path = &storage.config.get_cache_path();
+    println!("Cache path: {}", cache_path.display());
+    let client = spotify::get_client(&cache_path);
 
     let handler = SpotifyHandler {
         client: &client,
