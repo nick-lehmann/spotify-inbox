@@ -1,7 +1,13 @@
 [package]
 name = "spotify_inbox"
+description = "Find unsorted spotify playlist"
 version = "0.1.0"
 edition = "2021"
+authors = ["Nick Lehmann <nick@lehmann.sh"]
+license = "MIT OR Apache-2.0"
+readme = "README.md"
+categories = ["command-line-utilities"]
+
 
 [dependencies]
 clap = { version = "3.0.5", features = ["derive"] }
