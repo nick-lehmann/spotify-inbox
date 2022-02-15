@@ -27,10 +27,6 @@ impl SpotifyInboxConfig {
         SpotifyInboxConfig { xdg_dirs }
     }
 
-    pub fn get_saved_songs_cache_path(&self) -> PathBuf {
-        self.xdg_dirs.get_cache_file("saved-songs.json")
-    }
-
     pub fn get_playlist_path(&self, id: &PlaylistId) -> PathBuf {
         return self
             .xdg_dirs

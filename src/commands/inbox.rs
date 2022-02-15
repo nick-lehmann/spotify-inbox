@@ -46,4 +46,7 @@ pub fn choose_inbox(handler: &SpotifyHandler, config: &SpotifyInboxConfig) {
         .unwrap();
 
     println!("Setting \"{}\" as your inbox!", playlist_names[selection]);
+
+    let inbox_id = &user_playlists[selection].id;
+    config.inbox_playlist_set(&inbox_id)
 }

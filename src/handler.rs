@@ -3,9 +3,7 @@ use rspotify::{
     clients::{BaseClient, OAuthClient},
     AuthCodePkceSpotify,
 };
-use rspotify_model::{
-    Id, Page, PlayableItem, PlaylistItem, PrivateUser, SavedTrack, SimplifiedPlaylist,
-};
+use rspotify_model::{Id, PlayableItem, PlaylistItem, PrivateUser, SimplifiedPlaylist};
 use std::collections::HashSet;
 
 use crate::storage;
@@ -85,78 +83,6 @@ impl<'a> SpotifyHandler<'a> {
             .filter_map(|p| p.ok())
             .filter(|p| p.owner.id == current_user.id && !p.name.contains("Inbox"))
             .collect();
-    }
-
-    /// Return the ids of all saved songs.
-    // pub fn get_saved_songs(&self) -> Vec<String> {
-    #[allow(unreachable_code)]
-    pub fn saved_songs(&self) -> Vec<SavedTrack> {
-        return self.saved_songs_download();
-
-        // TODO: Skip if None received
-        let mut cached_saved_songs = match self.storage.get_saved_songs() {
-            Some(saved_songs) => saved_songs,
-            None => return self.saved_songs_download(),
-        };
-
-        let total_cached = cached_saved_songs.len() as u32;
-
-        cached_saved_songs.sort_unstable_by_key(|s| s.added_at);
-        cached_saved_songs.reverse();
-
-        let page_size = 50;
-        let saved_songs_page: Page<SavedTrack> = self
-            .client
-            .current_user_saved_tracks_manual(None, Some(page_size), Some(0))
-            .unwrap();
-        let total = saved_songs_page.total;
-        let mut saved_songs = saved_songs_page.items;
-
-        saved_songs.sort_unstable_by_key(|s| s.added_at);
-        saved_songs.reverse();
-
-        let latest_addition = saved_songs[0].added_at;
-        let latest_addition_cached = cached_saved_songs[0].added_at;
-
-        if total == total_cached {
-            if latest_addition == latest_addition_cached {
-                // println!("No new songs saved");
-                cached_saved_songs
-            } else {
-                // println!("We have the right amount of songs, but the latest addition is different. Refetch just to be sure");
-                self.saved_songs_download()
-            }
-        } else if latest_addition > latest_addition_cached {
-            // There are new songs that we have not cached yet, probably.
-            // println!("We have more songs than we have cached. Refetch just to be sure");
-
-            // Check if the downloaded songs are already enough
-            let new_songs: Vec<SavedTrack> = saved_songs
-                .into_iter()
-                .filter(|song| song.added_at > latest_addition_cached)
-                .collect();
-            if new_songs.len() == page_size as usize {
-                // Just download everything
-                return self.saved_songs_download();
-            }
-
-            let mut all_saved_songs: Vec<SavedTrack> = Vec::new();
-            all_saved_songs.extend(new_songs);
-            all_saved_songs.extend(cached_saved_songs);
-
-            all_saved_songs
-        } else {
-            // There were songs removed from the front that are still cached, probably.
-            println!("We have less songs than we have cached. Refetch just to be sure");
-            self.saved_songs_download()
-        }
-    }
-
-    fn saved_songs_download(&self) -> Vec<SavedTrack> {
-        self.client
-            .current_user_saved_tracks(None)
-            .filter_map(|t| t.ok())
-            .collect()
     }
 
     pub fn get_track_ids_in_playlists(
